@@ -1,37 +1,64 @@
-# db/graph_db.py
+# dbs/graph_db.py
 
+import os
+import pickle
 import networkx as nx
 
-G = nx.Graph()
+# -------------------------------
+# FILE TO STORE GRAPH
+# -------------------------------
+FILE = "graph.pkl"
 
 # -------------------------------
-# Add realistic sample data
+# LOAD OR CREATE GRAPH
 # -------------------------------
-users = ["Sai", "John", "Alice", "Bob", "Charlie", "David"]
+if os.path.exists(FILE):
+    with open(FILE, "rb") as f:
+        G = pickle.load(f)
+else:
+    G = nx.Graph()
 
-G.add_nodes_from(users)
+    # Initial data
+    users = ["Sai", "John", "Alice", "Bob", "Charlie", "David"]
+    G.add_nodes_from(users)
 
-# Friend relationships
-G.add_edges_from([
-    ("Sai", "John"),
-    ("Sai", "Alice"),
-    ("John", "Alice"),
-    ("John", "Bob"),
-    ("Alice", "Charlie"),
-    ("Bob", "David")
-])
+    G.add_edges_from([
+        ("Sai", "John"),
+        ("Sai", "Alice"),
+        ("John", "Alice"),
+        ("John", "Bob"),
+        ("Alice", "Charlie"),
+        ("Bob", "David")
+    ])
+
+    # Save initial graph
+    with open(FILE, "wb") as f:
+        pickle.dump(G, f)
+
 
 # -------------------------------
-# Graph Operations
+# SAVE FUNCTION (REUSABLE)
+# -------------------------------
+def save_graph():
+    with open(FILE, "wb") as f:
+        pickle.dump(G, f)
+
+
+# -------------------------------
+# GRAPH OPERATIONS
 # -------------------------------
 def run(query: str):
-    query = query.lower().strip()
+    query = query.strip()
+
+    # Normalize lowercase only for matching keywords
+    q_lower = query.lower()
 
     # -------------------------------
     # GET FRIENDS
     # -------------------------------
-    if query.startswith("friends of"):
-        name = query.replace("friends of ", "").capitalize()
+    if q_lower.startswith("friends of"):
+        name = query.replace("friends of", "").strip().title()
+
         if name in G:
             return list(G.neighbors(name))
         return "❌ User not found"
@@ -39,22 +66,23 @@ def run(query: str):
     # -------------------------------
     # MUTUAL FRIENDS
     # -------------------------------
-    if query.startswith("mutual friends"):
+    if q_lower.startswith("mutual friends"):
         parts = query.split()
+
         if len(parts) >= 4:
-            user1 = parts[2].capitalize()
-            user2 = parts[3].capitalize()
+            user1 = parts[2].title()
+            user2 = parts[3].title()
 
             if user1 in G and user2 in G:
-                mutual = list(nx.common_neighbors(G, user1, user2))
-                return mutual
+                return list(nx.common_neighbors(G, user1, user2))
+
         return "❌ Invalid users"
 
     # -------------------------------
     # FRIEND SUGGESTIONS
     # -------------------------------
-    if query.startswith("suggest friends for"):
-        name = query.replace("suggest friends for ", "").capitalize()
+    if q_lower.startswith("suggest friends for"):
+        name = query.replace("suggest friends for", "").strip().title()
 
         if name in G:
             friends = set(G.neighbors(name))
@@ -73,13 +101,16 @@ def run(query: str):
     # -------------------------------
     # ADD FRIENDSHIP
     # -------------------------------
-    if query.startswith("add friendship"):
+    if q_lower.startswith("add friendship"):
         parts = query.split()
+
         if len(parts) >= 4:
-            u1 = parts[2].capitalize()
-            u2 = parts[3].capitalize()
+            u1 = parts[2].title()
+            u2 = parts[3].title()
 
             G.add_edge(u1, u2)
+            save_graph()  # 🔥 SAVE
+
             return f"✅ Added friendship between {u1} and {u2}"
 
         return "❌ Invalid command"
@@ -87,14 +118,17 @@ def run(query: str):
     # -------------------------------
     # REMOVE FRIENDSHIP
     # -------------------------------
-    if query.startswith("remove friendship"):
+    if q_lower.startswith("remove friendship"):
         parts = query.split()
+
         if len(parts) >= 4:
-            u1 = parts[2].capitalize()
-            u2 = parts[3].capitalize()
+            u1 = parts[2].title()
+            u2 = parts[3].title()
 
             if G.has_edge(u1, u2):
                 G.remove_edge(u1, u2)
+                save_graph()  # 🔥 SAVE
+
                 return f"🗑 Removed friendship between {u1} and {u2}"
 
         return "❌ Invalid command"
@@ -102,7 +136,7 @@ def run(query: str):
     # -------------------------------
     # SHOW ALL CONNECTIONS
     # -------------------------------
-    if query == "all":
+    if q_lower == "all":
         return list(G.edges())
 
     return "❌ Unknown query"
@@ -115,23 +149,14 @@ def main():
     print("👥 ALL CONNECTIONS:")
     print(run("all"))
 
-    print("\n🤝 FRIENDS OF Sai:")
-    print(run("friends of Sai"))
-
-    print("\n🔗 MUTUAL FRIENDS (Sai & John):")
-    print(run("mutual friends Sai John"))
-
-    print("\n💡 FRIEND SUGGESTIONS FOR Sai:")
-    print(run("suggest friends for Sai"))
-
-    print("\n➕ ADD FRIENDSHIP:")
-    print(run("add friendship Sai David"))
+    print("\n➕ ADD FRIENDSHIP (Sai Tulasi):")
+    print(run("add friendship Sai Tulasi"))
 
     print("\n👥 UPDATED FRIENDS OF Sai:")
     print(run("friends of Sai"))
 
     print("\n🗑 REMOVE FRIENDSHIP:")
-    print(run("remove friendship Sai David"))
+    print(run("remove friendship Sai Tulasi"))
 
     print("\n👥 FINAL CONNECTIONS:")
     print(run("all"))

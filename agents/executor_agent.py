@@ -13,71 +13,38 @@ def executor_agent(state):
     db = state["db_choice"]
     action = state["action"]
     query = state["db_query"]
+    user_query = state.get("user_query", query)
 
-    print(f"⚡ Executing → {db} | Action → {action}")
+    print(f"\n⚡ Executing → DB: {db} | Action: {action} | Query: {query}")
 
     try:
         if db == "postgres":
+            # sqlite_db.run() handles SELECT vs INSERT/UPDATE/DELETE internally
             result = sqlite_db.run(query)
 
         elif db == "mongo":
+            # tinydb_db.run() uses GET/INSERT/UPDATE/DELETE command format
             result = tinydb_db.run(query)
 
         elif db == "redis":
+            # redis_mock.run() uses GET/SET/DELETE/INCR/ALL command format
             result = redis_mock.run(query)
 
         elif db == "neo4j":
+            # graph_db.run() uses natural language commands
             result = graph_db.run(query)
 
         else:
-            result = "❌ Unknown DB"
+            result = f"❌ Unknown database: '{db}'"
 
     except Exception as e:
-        result = f"❌ Error: {str(e)}"
+        result = f"❌ Execution Error: {str(e)}"
+
+    # Confirm writes with a clear message
+    if action in ("add", "update", "delete") and isinstance(result, str):
+        print(f"✅ Write operation result: {result}")
 
     return {
         **state,
         "db_result": result
     }
-
-
-# -------------------------------
-# MAIN FUNCTION (TESTING)
-# -------------------------------
-def main():
-    print("🔍 Testing Executor Agent...\n")
-
-    test_cases = [
-        {
-            "db_choice": "postgres",
-            "action": "read",
-            "db_query": "SELECT * FROM users"
-        },
-        {
-            "db_choice": "mongo",
-            "action": "read",
-            "db_query": "electronics"
-        },
-        {
-            "db_choice": "redis",
-            "action": "read",
-            "db_query": "GET session:abc123"
-        },
-        {
-            "db_choice": "neo4j",
-            "action": "read",
-            "db_query": "friends of Sai"
-        }
-    ]
-
-    for i, state in enumerate(test_cases, 1):
-        print(f"\n🧪 Test Case {i}:")
-        result = executor_agent(state)
-        print("📊 Result:", result["db_result"])
-
-
-# -------------------------------
-# RUN FILE DIRECTLY
-# -------------------------------
-if __name__ == "__main__":
-    main()

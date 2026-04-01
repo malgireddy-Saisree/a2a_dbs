@@ -1,20 +1,45 @@
-# db/redis_mock.py
+# dbs/redis_mock.py
+
+import os
+import pickle
 
 # -------------------------------
-# Mock Redis Data (Realistic)
+# FILE TO STORE DATA
 # -------------------------------
-cache = {
-    "session:abc123": {"user_id": 1, "name": "Sai", "status": "active"},
-    "session:def456": {"user_id": 2, "name": "John", "status": "inactive"},
-    
-    "token:user:1": "token_abc_xyz",
-    "token:user:2": "token_def_xyz",
+FILE = "redis_cache.pkl"
 
-    "cache:homepage": {"visits": 1200, "last_updated": "2026-03-31"},
-    
-    "rate_limit:user:1": 5,
-    "rate_limit:user:2": 2
-}
+# -------------------------------
+# LOAD OR CREATE CACHE
+# -------------------------------
+if os.path.exists(FILE):
+    with open(FILE, "rb") as f:
+        cache = pickle.load(f)
+else:
+    cache = {
+        "session:abc123": {"user_id": 1, "name": "Sai", "status": "active"},
+        "session:def456": {"user_id": 2, "name": "John", "status": "inactive"},
+        
+        "token:user:1": "token_abc_xyz",
+        "token:user:2": "token_def_xyz",
+
+        "cache:homepage": {"visits": 1200, "last_updated": "2026-03-31"},
+        
+        "rate_limit:user:1": 5,
+        "rate_limit:user:2": 2
+    }
+
+    # Save initial data
+    with open(FILE, "wb") as f:
+        pickle.dump(cache, f)
+
+
+# -------------------------------
+# SAVE FUNCTION
+# -------------------------------
+def save_cache():
+    with open(FILE, "wb") as f:
+        pickle.dump(cache, f)
+
 
 # -------------------------------
 # Redis-like Operations
@@ -41,6 +66,7 @@ def run(query: str):
         key = parts[1]
         value = " ".join(parts[2:])
         cache[key] = value
+        save_cache()  # 🔥 SAVE
         return f"✅ Set {key}"
 
     # -------------------------------
@@ -50,6 +76,7 @@ def run(query: str):
         key = parts[1]
         if key in cache:
             del cache[key]
+            save_cache()  # 🔥 SAVE
             return f"🗑 Deleted {key}"
         return "❌ Key Not Found"
 
@@ -59,6 +86,7 @@ def run(query: str):
     elif command == "INCR":
         key = parts[1]
         cache[key] = int(cache.get(key, 0)) + 1
+        save_cache()  # 🔥 SAVE
         return cache[key]
 
     # -------------------------------
@@ -76,9 +104,6 @@ def run(query: str):
 def main():
     print("📦 ALL DATA:")
     print(run("ALL"))
-
-    print("\n🔍 GET SESSION:")
-    print(run("GET session:abc123"))
 
     print("\n➕ SET NEW KEY:")
     print(run("SET session:xyz999 {user_id:3,name:Alice}"))

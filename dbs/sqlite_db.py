@@ -1,12 +1,15 @@
-# db/sqlite_db.py
+# dbs/sqlite_db.py
 
 import sqlite3
 
+# -------------------------------
+# CONNECT TO DATABASE (PERSISTENT)
+# -------------------------------
 conn = sqlite3.connect("a2a.db", check_same_thread=False)
 cursor = conn.cursor()
 
 # -------------------------------
-# Create tables
+# CREATE TABLES
 # -------------------------------
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
@@ -24,7 +27,7 @@ CREATE TABLE IF NOT EXISTS orders (
 """)
 
 # -------------------------------
-# Insert sample data
+# INSERT SAMPLE DATA (SAFE)
 # -------------------------------
 users_data = [
     (1, "Sai"),
@@ -48,34 +51,44 @@ cursor.executemany("INSERT OR IGNORE INTO orders VALUES (?, ?, ?)", orders_data)
 conn.commit()
 
 # -------------------------------
-# Run query function
+# RUN QUERY FUNCTION (UPDATED)
 # -------------------------------
 def run(query):
-    cursor.execute(query)
-    return cursor.fetchall()
+    try:
+        cursor.execute(query)
+
+        # ✅ If SELECT → fetch data
+        if query.strip().lower().startswith("select"):
+            return cursor.fetchall()
+
+        # ✅ For INSERT / UPDATE / DELETE → commit
+        else:
+            conn.commit()
+            return "✅ Query executed successfully"
+
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
 
 # -------------------------------
 # MAIN FUNCTION (TESTING)
 # -------------------------------
 def main():
     print("📋 USERS TABLE:")
-    users = run("SELECT * FROM users")
-    for row in users:
-        print(row)
+    print(run("SELECT * FROM users"))
 
-    print("\n📦 ORDERS TABLE:")
-    orders = run("SELECT * FROM orders")
-    for row in orders:
-        print(row)
+    print("\n➕ INSERT NEW USER:")
+    print(run("INSERT INTO users VALUES (5, 'Tulasi')"))
 
-    print("\n💰 TOTAL ORDERS PER USER:")
-    result = run("""
-        SELECT user_id, SUM(amount)
-        FROM orders
-        GROUP BY user_id
-    """)
-    for row in result:
-        print(row)
+    print("\n📋 USERS AFTER INSERT:")
+    print(run("SELECT * FROM users"))
+
+    print("\n🗑 DELETE USER:")
+    print(run("DELETE FROM users WHERE id = 5"))
+
+    print("\n📋 FINAL USERS:")
+    print(run("SELECT * FROM users"))
+
 
 # -------------------------------
 # RUN FILE DIRECTLY
