@@ -1,17 +1,40 @@
 # agents/router_agent.py
-import sys
-import os
+# -----------------------------------------------------------
+# Router Agent
+#
+# A2A role : SENDER → executor_agent
+# Receives  : A2AMessage  (from CLI / orchestrator)
+# Returns   : RouterDecision (sent to executor_agent)
+#
+# Responsibility: understand the user's intent and decide
+# WHICH database to use + generate the exact executable command.
+# -----------------------------------------------------------
 
+import sys, os, json, re
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import json
-import re
+
 from llm import call_llm
+from protocol.messages import AgentCard, A2AMessage, RouterDecision
 
 
-def router_agent(state):
-    query = state["query"]
+class RouterAgent:
 
-    prompt = f"""
+    # Every A2A agent exposes a card describing who it is
+    card = AgentCard(
+        name="router_agent",
+        role="Database router",
+        version="1.0",
+        description="Receives a natural language query, decides which DB to use, and produces an executable DB command."
+    )
+
+    def invoke(self, message: A2AMessage) -> RouterDecision:
+        """
+        Receive an A2AMessage from the CLI.
+        Return a RouterDecision for the executor agent.
+        """
+        query = message.query
+
+        prompt = f"""
 You are an intelligent database routing agent. Analyze the user query and route it to the correct database with a valid, executable command.
 
 User Query: "{query}"
@@ -53,7 +76,6 @@ User Query: "{query}"
   Examples:
     - "update price of iphone 15 to 1400"    -> UPDATE iphone-15 price 1400
     - "change stock of sony headphones to 80" -> UPDATE sony-headphones stock 80
-    - "update rating of macbook air to 4.8"  -> UPDATE apple-macbook-air rating 4.8
     - "delete samsung galaxy s23"            -> DELETE samsung-galaxy-s23
     - "add a Sony TV priced 800"             -> INSERT 8 Sony-TV Sony electronics 800 4.4 25
 
@@ -70,12 +92,12 @@ User Query: "{query}"
     - "delete session abc123":  DELETE session:abc123
 
 **neo4j** - NetworkX graph (friendships)
-  Commands (NO Cypher - use ONLY these exact formats):
-    - friends of <name>
+  Commands (NO Cypher):
+    - friends of <Name>
     - add friendship <Name1> <Name2>
     - remove friendship <Name1> <Name2>
     - mutual friends <Name1> <Name2>
-    - suggest friends for <name>
+    - suggest friends for <Name>
     - all
   Examples:
     - "add Bob as Alice's friend":      add friendship Alice Bob
@@ -85,9 +107,9 @@ User Query: "{query}"
 
 ### RULES
 1. Pick the database that owns the data type in the query.
-2. Generate a VALID, EXECUTABLE command - never a plain description.
+2. Generate a VALID, EXECUTABLE command — never a plain description.
 3. For mongo INSERT, infer missing fields with sensible defaults (rating 4.0, stock 10).
-4. Return ONLY raw JSON with no markdown, no backticks, no extra text.
+4. Return ONLY raw JSON — no markdown, no backticks, no extra text.
 
 ### OUTPUT FORMAT
 {{
@@ -98,44 +120,29 @@ User Query: "{query}"
 }}
 """
 
-    response = call_llm(prompt)
-    print("\n🔍 RAW LLM RESPONSE:\n", response)
+        response = call_llm(prompt)
+        print(f"\n[{self.card.name}] 🔍 LLM response: {response[:120]}...")
 
-    cleaned = re.sub(r"```json|```", "", response).strip().strip("`").strip()
-    print("\n🧹 CLEANED RESPONSE:\n", cleaned)
+        cleaned = re.sub(r"```json|```", "", response).strip().strip("`").strip()
 
-    try:
-        parsed = json.loads(cleaned)
-    except Exception:
-        print("❌ JSON PARSE ERROR — Response was:", cleaned)
-        raise ValueError("❌ LLM returned invalid JSON")
+        try:
+            parsed = json.loads(cleaned)
+        except Exception:
+            raise ValueError(f"[{self.card.name}] ❌ Invalid JSON from LLM: {cleaned}")
 
-    print("\n🧠 Parsed Decision:", parsed)
+        decision = RouterDecision(
+            task_id=message.task_id,
+            query=query,
+            db_choice=parsed["db_choice"],
+            action=parsed["action"],
+            db_query=parsed["db_query"],
+            reason=parsed.get("reason", ""),
+            sender=self.card.name
+        )
 
-    return {
-        **state,
-        "user_query": query,
-        "db_choice": parsed.get("db_choice"),
-        "action": parsed.get("action"),
-        "db_query": parsed.get("db_query")
-    }
+        print(f"[{self.card.name}] ✅ Decision → db={decision.db_choice} | action={decision.action} | cmd={decision.db_query}")
+        return decision
 
 
-# -------------------------------
-# TEST
-# -------------------------------
-if __name__ == "__main__":
-    tests = [
-        "update the price of iphone 15 to 1400",
-        "delete samsung galaxy s23",
-        "update stock of sony headphones to 80",
-        "add a Google Pixel priced at 700",
-        "Add a new user named Tulasi with id 5",
-        "Remove friendship between Sai and John",
-        "Delete redis session abc123",
-        "Show all products",
-    ]
-    for t in tests:
-        print(f"\n{'='*50}\nQuery: {t}")
-        result = router_agent({"query": t})
-        print(f"DB: {result['db_choice']} | Action: {result['action']} | Query: {result['db_query']}")
+# Singleton instance (imported by graph)
+router_agent = RouterAgent()
